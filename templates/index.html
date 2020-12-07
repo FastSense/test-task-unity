@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>
+    </title>
+</head>
+<body>
+    <h1>
+        Simple point cloud visualisation demo
+    </h1>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.2/pako.min.js" integrity="sha512-IjkvjWp4tSkhkQRb9gFwCcMhBWZLPKc7Zo8ifb6qxORyehV072QgRVG3F0fwAaJh0fnEFNLc2+XggoC5wvW24g==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.min.js" integrity="sha512-WIklPM6qPCIp6d3fSSr90j+1unQHUOoWDS4sdTiR8gxUTnyZ8S2Mr8e10sKKJ/bhJgpAa/qG068RDkg6fIlNFA==" crossorigin="anonymous"></script>
+    
+    <script type="text/javascript" charset="utf-8">
+        var cloud = new Float32Array(0)
+
+        function _base64ToArrayBuffer(base64) {
+            let binary_string = window.atob(base64);
+            let len = binary_string.length;
+            let bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function _arrayBufferToFloat32Array(buffer) {
+            let incomingData = new Uint8Array(buffer);
+
+            let fLen = incomingData.length / Float32Array.BYTES_PER_ELEMENT,
+            dView = new DataView( new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT) ),
+            outputData= new Float32Array(fLen),
+            p = 0;
+
+            for(let j=0; j < fLen; j++){
+                p = j * 4;
+                dView.setUint8(0, incomingData[p]);
+                dView.setUint8(1, incomingData[p+1]);
+                dView.setUint8(2, incomingData[p+2]);
+                dView.setUint8(3, incomingData[p+3]);
+                outputData[j] = dView.getFloat32(0,true);
+            }
+            return outputData;
+        }
+
+        // Receives PointCloud data as base64 and converts it to float array
+        function reqListener () {
+            // Converting base64 to ArrayBuffer
+            buff = _base64ToArrayBuffer(JSON.parse(this.responseText).data)
+            // Unzipping data
+            decompressed = pako.inflate(buff)
+            // Converting data to Float32Array
+            cloud = _arrayBufferToFloat32Array(decompressed)
+        }
+
+        function setup() {
+            createCanvas(800, 600);
+        }
+
+        function _iso(x, y, z) {
+            let a_z = x
+            let a_x = -y
+            let a_y = z
+
+            return { x: ((a_x - a_z) / 1.41), y: ((a_x - 2*a_y + a_z) / Math.sqrt(6)) }
+        }
+
+        function draw() {
+            push()
+            
+            // Draw preparations
+
+            background(240);
+            translate(400, 300);
+            scale(40)
+            strokeWeight(0.07)
+            stroke(0, 0, 255, 100)
+            
+            // Drawing axes
+
+            let ox = _iso(1, 0, 0), oy = _iso(0, -1, 0), oz = _iso(0, 0, 1)
+
+            strokeWeight(0.07)
+            stroke('red')
+            line(0, 0, ox.x, ox.y)
+
+            stroke('green')
+            line(0, 0, oy.x, oy.y)
+
+            stroke('blue')
+            line(0, 0, oz.x, oz.y)
+
+            // Draw point cloud
+
+            strokeWeight(0.07)
+            stroke(0, 0, 255, 100)
+            
+            cc = cloud
+            for (let i = 0; i < cc.length; i += 8) {
+                let b = _iso(cc[i+0], cc[i+1], cc[i+2])
+                line(b.x, b.y, b.x, b.y)
+            }
+            pop()
+
+            // Draw FPS
+            textSize(10);
+            fill('black');
+            text('FPS: ' + frameRate().toFixed(2), 5, 15)
+        }
+
+        // Start stupid server polling
+        setInterval(() => {
+            var oReq = new XMLHttpRequest();
+            oReq.addEventListener("load", reqListener);
+            oReq.open("GET", "http://localhost:5000/point_cloud");
+            oReq.send();
+        }, 20)
+
+    </script>
+</body>
+</html>
